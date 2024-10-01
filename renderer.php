@@ -78,6 +78,11 @@ class qtype_yconrunner_renderer extends qtype_renderer
         $form .= html_writer::tag('div', '', array('id' => 'result-message', 'class' => 'alert alert-info', 'role' => 'alert', 'style' => 'display:none;'));
         $form .= html_writer::end_tag('div');
         $form .= html_writer::end_tag('form');
+        $form .= html_writer::empty_tag('input', array(
+            'type' => 'hidden',
+            'name' => 'code',
+            'id' => 'code-hidden-field',
+        ));
 
         $form .= $this->page->requires->js_call_amd('qtype_yconrunner/yconrunner', 'init', array(array(
             'contestid' => $contestid,

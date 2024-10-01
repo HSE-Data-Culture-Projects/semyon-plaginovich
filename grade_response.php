@@ -15,7 +15,8 @@ if (isset($result) && $result == 1) {
 }
 
 // Получение данных для вопроса и попытки
-$attemptstep = $DB->get_record('question_attempt_steps', array('questionattemptid' => $attemptid));
+$attemptsteps = $DB->get_records('question_attempt_steps', array('questionattemptid' => $attemptid), 'sequencenumber DESC', '*', 0, 1);
+$attemptstep = reset($attemptsteps);
 if (!$attemptstep) {
     throw new moodle_exception('invalidattemptid',  'question');
 }
@@ -25,7 +26,7 @@ $transaction = $DB->start_delegated_transaction();
 
 $DB->update_record('question_attempt_steps', array(
     'id' => $attemptstep->id,
-    'state' => 'gradedright',
+    'state' => $fraction == 1.0 ? 'gradedright' : 'gradedwrong',
     'fraction' => $fraction
 ));
 

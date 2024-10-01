@@ -29,11 +29,22 @@ define(['jquery', 'core/log', 'qtype_yconrunner/ace_wrapper'], function ($, log,
                 acePromise.then(function (ace) {
                     log.debug('ACE loaded successfully');
                     var editor = ace.edit("editor");
-                    editor.setTheme("ace/theme/monokai-light");
+                    editor.setTheme("ace/theme/monokai");
                     editor.session.setMode("ace/mode/python");
                     editor.setOptions({
                         fontSize: "18px"
                     });
+
+                    // Предотвращаем добавление Ace Editor обработчиков beforeunload
+                    editor.$blockScrolling = Infinity;
+
+                    // Удаляем обработчик события beforeunload, если он был добавлен
+                    window.onbeforeunload = null;
+
+                    // Предотвращаем срабатывание других обработчиков beforeunload
+                    window.addEventListener('beforeunload', function(e) {
+                        e.stopImmediatePropagation();
+                    }, true);
 
                     $('#language-select').change(function () {
                         var language = $(this).val();
@@ -53,7 +64,8 @@ define(['jquery', 'core/log', 'qtype_yconrunner/ace_wrapper'], function ($, log,
                         }
                     });
 
-                    $('#file-upload').after('<button type="button" id="remove-file" class="btn btn-danger ml-2">Удалить файл</button>');
+                    $('#file-upload')
+                        .after('<button type="button" id="remove-file" class="btn btn-danger ml-2">Удалить файл</button>');
 
                     // Обработчик для удаления файла
                     $('#remove-file').click(function () {
@@ -64,6 +76,11 @@ define(['jquery', 'core/log', 'qtype_yconrunner/ace_wrapper'], function ($, log,
                     $('#submit-button').click(function () {
                         // Удаляем все обработчики событий на уход со страницы
                         window.onbeforeunload = null;
+
+                        // Предотвращаем срабатывание других обработчиков beforeunload
+                        window.addEventListener('beforeunload', function(e) {
+                            e.stopImmediatePropagation();
+                        }, true);
 
                         let answer = editor.getValue();
                         let language = $('#language-select').val();
@@ -77,9 +94,15 @@ define(['jquery', 'core/log', 'qtype_yconrunner/ace_wrapper'], function ($, log,
                                 commentPrefix = '#';
                                 break;
                             case 'cpp':
+                                extension = '.cpp';
+                                commentPrefix = '//';
+                                break;
                             case 'java':
+                                extension = '.java';
+                                commentPrefix = '//';
+                                break;
                             case 'csharp':
-                                extension = language === 'cpp' ? '.cpp' : (language === 'java' ? '.java' : '.cs');
+                                extension = '.cs';
                                 commentPrefix = '//';
                                 break;
                         }
@@ -106,22 +129,23 @@ define(['jquery', 'core/log', 'qtype_yconrunner/ace_wrapper'], function ($, log,
                             reader.readAsText(file);
                         } else {
                             // Если файл не загружен, используем текст из редактора
-                            let file = new Blob([answer], {type: 'text/plain'});
-                            formData.append('file', file, 'main' + extension);
+                            formData.append('code', answer);
+                            formData.append('extension', extension);
                             sendRequest(formData, language, contestid);
                         }
                     });
 
+                    // Функция для отправки запроса на сервер
                     function sendRequest(formData, language, contestid) {
-                        formData.append('compiler', language === 'python' ? 'python3' : (language === 'cpp' ? 'gcc_cpp20' : (language === 'java' ? 'javac' : 'mcs')));
+                        formData.append('compiler', language === 'python' ? 'python3' :
+                            (language === 'cpp' ? 'gcc_cpp20' : (language === 'java' ? 'javac' : 'mcs')));
                         formData.append('problem', 'A'); // Пример использования submissionid в качестве problem
-
-                        const myHeaders = new Headers();
-                        myHeaders.append("Authorization", "OAuth y0_AgAEA7qkKGeUAAv6MwAAAAEIAX7dAABWL6qZvrJOUJvQhMBpgC27VCKHrg");
 
                         const requestOptions = {
                             method: "POST",
-                            headers: myHeaders,
+                            headers: {
+                                // Добавьте необходимые заголовки
+                            },
                             body: formData,
                             redirect: "follow"
                         };
@@ -146,19 +170,48 @@ define(['jquery', 'core/log', 'qtype_yconrunner/ace_wrapper'], function ($, log,
                                     success: function (response) {
                                         log.debug('Оценка успешно сохранена', response);
                                         $('#file-upload').val(null); // Удаление файла из прикрепления
+
+                                        // Сообщаем Moodle, что форма была отправлена
+                                        var form = document.getElementById('responseform');
+                                        if (form && M && M.core_formchangechecker) {
+                                            M.core_formchangechecker.set_form_submitted();
+                                        }
+
+                                        // Удаляем обработчик события beforeunload
                                         window.onbeforeunload = null;
+
+                                        // Предотвращаем срабатывание других обработчиков beforeunload
+                                        window.addEventListener('beforeunload', function(e) {
+                                            e.stopImmediatePropagation();
+                                        }, true);
+
+                                        // Перезагружаем страницу
+                                        window.location.reload();
                                     },
                                     error: function (error) {
                                         log.error('Ошибка при сохранении оценки:', error);
-                                        $('#file-upload').val(null); // Удаление файла из прикрепления
+                                        $('#file-upload').val(null);
+
+                                        // Аналогичные действия
+                                        var form = document.getElementById('responseform');
+                                        if (form && M && M.core_formchangechecker) {
+                                            M.core_formchangechecker.set_form_submitted();
+                                        }
+
                                         window.onbeforeunload = null;
+                                        window.addEventListener('beforeunload', function(e) {
+                                            e.stopImmediatePropagation();
+                                        }, true);
+
+                                        window.location.reload();
                                     }
                                 });
                             })
                             .catch(error => {
                                 log.debug(error);
                                 $('#result-message').text('Произошла ошибка при отправке решения.').show();
-                                // Отправка результата на сервер Moodle для оценки
+
+                                // Отправка результата на сервер Moodle для оценки с результатом 0
                                 $.ajax({
                                     url: M.cfg.wwwroot + '/question/type/yconrunner/grade_response.php',
                                     method: 'POST',
@@ -166,13 +219,35 @@ define(['jquery', 'core/log', 'qtype_yconrunner/ace_wrapper'], function ($, log,
                                     data: JSON.stringify({result: 0, attemptid: params.attemptid}),
                                     success: function (response) {
                                         log.debug('Оценка успешно сохранена', response);
-                                        $('#file-upload').val(null); // Удаление файла из прикрепления
+                                        $('#file-upload').val(null);
+
+                                        var form = document.getElementById('responseform');
+                                        if (form && M && M.core_formchangechecker) {
+                                            M.core_formchangechecker.set_form_submitted();
+                                        }
+
                                         window.onbeforeunload = null;
+                                        window.addEventListener('beforeunload', function(e) {
+                                            e.stopImmediatePropagation();
+                                        }, true);
+
+                                        window.location.reload();
                                     },
                                     error: function (error) {
                                         log.error('Ошибка при сохранении оценки:', error);
-                                        $('#file-upload').val(null); // Удаление файла из прикрепления
+                                        $('#file-upload').val(null);
+
+                                        var form = document.getElementById('responseform');
+                                        if (form && M && M.core_formchangechecker) {
+                                            M.core_formchangechecker.set_form_submitted();
+                                        }
+
                                         window.onbeforeunload = null;
+                                        window.addEventListener('beforeunload', function(e) {
+                                            e.stopImmediatePropagation();
+                                        }, true);
+
+                                        window.location.reload();
                                     }
                                 });
                             });
