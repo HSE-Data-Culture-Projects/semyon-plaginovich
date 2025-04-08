@@ -2,6 +2,8 @@ define(['jquery', 'core/log', 'qtype_yconrunner/ace_wrapper'], function ($, log,
     return {
         init: function (params) {
             $(document).ready(function () {
+                var attemptid = params.attemptid; // Получение attemptid из переданных параметров
+
                 var questions = document.querySelectorAll('.que');
 
                 questions.forEach(function(question) {
@@ -17,7 +19,7 @@ define(['jquery', 'core/log', 'qtype_yconrunner/ace_wrapper'], function ($, log,
                 });
 
                 // Загрузка данных из API
-                fetch(`http://localhost:3000/api/contests/${params.contestid}/problems/${params.submissionid}/statement`)
+                fetch(`http://185.4.67.138:3002/api/contests/${params.contestid}/problems/${params.submissionid}/statement`)
                     .then(response => response.text())
                     .then(data => {
                         log.debug('Received problem statement:', data);
@@ -29,22 +31,31 @@ define(['jquery', 'core/log', 'qtype_yconrunner/ace_wrapper'], function ($, log,
                 acePromise.then(function (ace) {
                     log.debug('ACE loaded successfully');
                     var editor = ace.edit("editor");
-                    editor.setTheme("ace/theme/monokai");
+                    editor.setTheme("ace/theme/monokai-light");
                     editor.session.setMode("ace/mode/python");
                     editor.setOptions({
                         fontSize: "18px"
                     });
 
-                    // Предотвращаем добавление Ace Editor обработчиков beforeunload
-                    editor.$blockScrolling = Infinity;
+                    // Установка содержимого редактора из скрытого поля
+                    var initialCode = $('#answer-field').val();
+                    if (initialCode) {
+                        editor.setValue(initialCode, -1);
+                    }
 
-                    // Удаляем обработчик события beforeunload, если он был добавлен
-                    window.onbeforeunload = null;
+                    // Синхронизация содержимого редактора с скрытым полем
+                    editor.getSession().on('change', function(){
+                        var code = editor.getValue();
+                        $('#answer-field').val(code);
+                    });
 
-                    // Предотвращаем срабатывание других обработчиков beforeunload
-                    window.addEventListener('beforeunload', function(e) {
-                        e.stopImmediatePropagation();
-                    }, true);
+                    // Загрузка истории вердиктов из Local Storage и отображение
+                    loadVerdictHistory();
+
+                    // Добавляем обработчик beforeunload для предупреждения о несохраненных изменениях
+                    window.onbeforeunload = function (e) {
+                        return 'Вы уверены, что хотите покинуть страницу? Несохраненные изменения будут потеряны.';
+                    };
 
                     $('#language-select').change(function () {
                         var language = $(this).val();
@@ -64,8 +75,7 @@ define(['jquery', 'core/log', 'qtype_yconrunner/ace_wrapper'], function ($, log,
                         }
                     });
 
-                    $('#file-upload')
-                        .after('<button type="button" id="remove-file" class="btn btn-danger ml-2">Удалить файл</button>');
+                    $('#file-upload').after('<button type="button" id="remove-file" class="btn btn-danger ml-2">Удалить файл</button>');
 
                     // Обработчик для удаления файла
                     $('#remove-file').click(function () {
@@ -74,13 +84,8 @@ define(['jquery', 'core/log', 'qtype_yconrunner/ace_wrapper'], function ($, log,
                     });
 
                     $('#submit-button').click(function () {
-                        // Удаляем все обработчики событий на уход со страницы
+                        // Удаляем обработчик событий на уход со страницы
                         window.onbeforeunload = null;
-
-                        // Предотвращаем срабатывание других обработчиков beforeunload
-                        window.addEventListener('beforeunload', function(e) {
-                            e.stopImmediatePropagation();
-                        }, true);
 
                         let answer = editor.getValue();
                         let language = $('#language-select').val();
@@ -94,15 +99,9 @@ define(['jquery', 'core/log', 'qtype_yconrunner/ace_wrapper'], function ($, log,
                                 commentPrefix = '#';
                                 break;
                             case 'cpp':
-                                extension = '.cpp';
-                                commentPrefix = '//';
-                                break;
                             case 'java':
-                                extension = '.java';
-                                commentPrefix = '//';
-                                break;
                             case 'csharp':
-                                extension = '.cs';
+                                extension = language === 'cpp' ? '.cpp' : (language === 'java' ? '.java' : '.cs');
                                 commentPrefix = '//';
                                 break;
                         }
@@ -124,49 +123,52 @@ define(['jquery', 'core/log', 'qtype_yconrunner/ace_wrapper'], function ($, log,
                                 let content = e.target.result;
                                 let modifiedContent = randomComment + content;
                                 formData.append('file', new Blob([modifiedContent], {type: 'text/plain'}), 'main' + extension);
-                                sendRequest(formData, language, contestid);
+                                sendRequest(formData, language, contestid, answer);
                             };
                             reader.readAsText(file);
                         } else {
                             // Если файл не загружен, используем текст из редактора
                             formData.append('code', answer);
                             formData.append('extension', extension);
-                            sendRequest(formData, language, contestid);
+                            sendRequest(formData, language, contestid, answer);
                         }
                     });
 
-                    // Функция для отправки запроса на сервер
-                    function sendRequest(formData, language, contestid) {
-                        formData.append('compiler', language === 'python' ? 'python3' :
-                            (language === 'cpp' ? 'gcc_cpp20' : (language === 'java' ? 'javac' : 'mcs')));
-                        formData.append('problem', 'A'); // Пример использования submissionid в качестве problem
+                    function sendRequest(formData, language, contestid, answer) {
+                        formData.append('compiler', language === 'python' ? 'python3' : (language === 'cpp' ? 'gcc_cpp20' : (language === 'java' ? 'javac' : 'mcs')));
+                        formData.append('problem', params.submissionid); // Используем submissionid из настроек
+
+                        const myHeaders = new Headers();
+                        myHeaders.append("Authorization", "OAuth y0_AgAEA7qkKGeUAAv6MwAAAAEIAX7dAABWL6qZvrJOUJvQhMBpgC27VCKHrg");
 
                         const requestOptions = {
                             method: "POST",
-                            headers: {
-                                // Добавьте необходимые заголовки
-                            },
+                            headers: myHeaders,
                             body: formData,
                             redirect: "follow"
                         };
 
-                        fetch(`http://localhost:3000/api/contests/${contestid}/submissions`, requestOptions)
+                        fetch(`http://185.4.67.138:3002/api/contests/${contestid}/submissions`, requestOptions)
                             .then(response => response.json())
                             .then(result => {
                                 log.debug(result);
 
                                 // Получение вердикта из ответа
-                                let verdict = result.verdict;
+                                let verdict = result.verdict || (result.status === 'OK' ? 'OK' : 'Error');
 
-                                // Отображение сообщения пользователю
-                                $('#result-message').text(verdict).show();
+                                // Добавление вердикта в историю и отображение
+                                addVerdictToHistory(verdict);
 
                                 // Отправка результата на сервер Moodle для оценки
                                 $.ajax({
                                     url: M.cfg.wwwroot + '/question/type/yconrunner/grade_response.php',
                                     method: 'POST',
                                     contentType: 'application/json',
-                                    data: JSON.stringify({result: verdict === 'OK' ? 1 : 0, attemptid: params.attemptid}),
+                                    data: JSON.stringify({
+                                        result: verdict === 'OK' ? 1 : 0,
+                                        attemptid: attemptid, // Используем attemptid
+                                        verdict: verdict // Передаём verdict
+                                    }),
                                     success: function (response) {
                                         log.debug('Оценка успешно сохранена', response);
                                         $('#file-upload').val(null); // Удаление файла из прикрепления
@@ -216,7 +218,7 @@ define(['jquery', 'core/log', 'qtype_yconrunner/ace_wrapper'], function ($, log,
                                     url: M.cfg.wwwroot + '/question/type/yconrunner/grade_response.php',
                                     method: 'POST',
                                     contentType: 'application/json',
-                                    data: JSON.stringify({result: 0, attemptid: params.attemptid}),
+                                    data: JSON.stringify({result: 0, attemptid: attemptid}),
                                     success: function (response) {
                                         log.debug('Оценка успешно сохранена', response);
                                         $('#file-upload').val(null);
@@ -252,10 +254,38 @@ define(['jquery', 'core/log', 'qtype_yconrunner/ace_wrapper'], function ($, log,
                                 });
                             });
                     }
-                }).catch(function (error) {
-                    log.error('Failed to load ACE:', error);
+
+                    // Функция для загрузки истории вердиктов из Local Storage и отображения
+                    function loadVerdictHistory() {
+                        let key = `yconrunner_verdicts_${attemptid}`; // Уникальный ключ для текущей попытки
+                        let verdicts = JSON.parse(localStorage.getItem(key)) || [];
+                        let $historyList = $('#verdict-history');
+
+                        $historyList.empty(); // Очистка списка перед загрузкой
+
+                        verdicts.forEach(function(verdict) {
+                            let alertClass = (verdict === 'OK') ? 'alert-success' : 'alert-danger';
+                            let $item = $('<li>')
+                                .addClass(`list-group-item list-group-item-${alertClass}`)
+                                .text(verdict);
+                            $historyList.append($item);
+                        });
+                    }
+
+                    // Функция для добавления нового вердикта в историю
+                    function addVerdictToHistory(verdict) {
+                        let key = `yconrunner_verdicts_${attemptid}`; // Уникальный ключ для текущей попытки
+                        let verdicts = JSON.parse(localStorage.getItem(key)) || [];
+                        verdicts.unshift(verdict); // Добавляем новый вердикт в начало массива
+
+                        if (verdicts.length > 3) {
+                            verdicts.pop(); // Удаляем самый старый вердикт, если длина превышает 3
+                        }
+
+                        localStorage.setItem(key, JSON.stringify(verdicts));
+                        loadVerdictHistory(); // Обновляем отображение истории
+                    }
+
                 });
-            });
-        }
-    };
-});
+            }
+        );}};});

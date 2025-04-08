@@ -81,6 +81,11 @@ class qtype_yconrunner_question extends question_graded_automatically
         }
     }
 
+        public function get_expected_data()
+    {
+        return array('answer' => PARAM_RAW, 'verdict' => PARAM_RAW);
+    }
+
     public function grade_response(array $response)
     {
         if (isset($response['result'])) {
@@ -91,15 +96,11 @@ class qtype_yconrunner_question extends question_graded_automatically
                 $fraction = 1.0;
             }
 
+            // Сохраняем 'answer' и 'verdict' в данных ответа
             return array($fraction, question_state::graded_state_for_fraction($fraction));
         } else {
             return array(0.0, question_state::$needsgrading);
         }
-    }
-
-    public function get_expected_data()
-    {
-        return array('grade' => PARAM_FLOAT);
     }
 
     public function summarise_response(array $response)
