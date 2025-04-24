@@ -1,13 +1,17 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-  <XMLDB PATH="question/type/yconrunner/db" VERSION="20240805" COMMENT="XMLDB file for Moodle question/type/yconrunner">
-    <TABLES>
-      <TABLE NAME="qtype_yconrunner" COMMENT="Default comment for qtype_yconrunner, please edit me">
-        <FIELDS>
-          <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
-        </FIELDS>
-        <KEYS>
-          <KEY NAME="primary" TYPE="primary" FIELDS="id" />
-        </KEYS>
-      </TABLE>
-    </TABLES>
-  </XMLDB>
+<XMLDB PATH="question/type/yconrunner/db" VERSION="2024083463" COMMENT="XMLDB file for Moodle question/type/yconrunner">
+  <TABLES>
+    <TABLE NAME="qtype_yconrunner" COMMENT="Stores options for the yconrunner question type">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="questionid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" COMMENT="Related question id" />
+        <FIELD NAME="contestid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" COMMENT="Contest id" />
+        <FIELD NAME="submissionid" TYPE="char" LENGTH="50" NOTNULL="true" DEFAULT="" COMMENT="Submission id" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="questionid_key" TYPE="unique" FIELDS="questionid" />
+      </KEYS>
+    </TABLE>
+  </TABLES>
+</XMLDB>

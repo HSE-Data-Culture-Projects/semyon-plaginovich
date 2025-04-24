@@ -19,7 +19,7 @@ define(['jquery', 'core/log', 'qtype_yconrunner/ace_wrapper'], function ($, log,
                 });
 
                 // Загрузка данных из API
-                fetch(`http://185.4.67.138:3002/api/contests/${params.contestid}/problems/${params.submissionid}/statement`)
+                fetch(`https://185.4.67.138/contest/api/contests/${params.contestid}/problems/${params.submissionid}/statement`)
                     .then(response => response.text())
                     .then(data => {
                         log.debug('Received problem statement:', data);
@@ -148,7 +148,7 @@ define(['jquery', 'core/log', 'qtype_yconrunner/ace_wrapper'], function ($, log,
                             redirect: "follow"
                         };
 
-                        fetch(`http://185.4.67.138:3002/api/contests/${contestid}/submissions`, requestOptions)
+                        fetch(`https://185.4.67.138/contest/api/contests/${contestid}/submissions`, requestOptions)
                             .then(response => response.json())
                             .then(result => {
                                 log.debug(result);
