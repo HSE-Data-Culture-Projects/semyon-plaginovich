@@ -27,7 +27,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'qtype_yconrunner';
-$plugin->version   = 2024083464;
+$plugin->version   = 2024083465;
 
 $plugin->requires  = 2012062504;
 
